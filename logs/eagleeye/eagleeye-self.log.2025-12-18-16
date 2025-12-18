@@ -1,0 +1,2 @@
+2025-12-18T16:52:25+08:00	INFO	EagleEye goroutine start	{"method": "gitlab.alibaba-inc.com/amap-go/eagleeye-go/internal.(*Controller).calculator-fm"}
+2025-12-18T16:52:25+08:00	INFO	EagleEye goroutine start	{"method": "gitlab.alibaba-inc.com/amap-go/eagleeye-go/internal.(*Controller).writer-fm"}

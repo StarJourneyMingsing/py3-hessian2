@@ -1,0 +1,4 @@
+2025-12-18T16:52:35.196000795+08:00	INFO	remoting/rpc_client.go:30	gitlab.alibaba-inc.com/amap-go/remoting-go/remoting.NewRPCClient	RpcClient initial success
+2025-12-18T16:52:35.363589741+08:00	INFO	remoting/rpc_conn.go:57	gitlab.alibaba-inc.com/amap-go/remoting-go/remoting.newPoolConn	[poolConn.newPoolConn]Create new poolConn, addr: 11.167.166.159:9600
+2025-12-18T16:52:36.635128102+08:00	INFO	remoting/rpc_client.go:30	gitlab.alibaba-inc.com/amap-go/remoting-go/remoting.NewRPCClient	RpcClient initial success
+2025-12-18T16:52:36.676930485+08:00	INFO	remoting/rpc_conn.go:57	gitlab.alibaba-inc.com/amap-go/remoting-go/remoting.newPoolConn	[poolConn.newPoolConn]Create new poolConn, addr: 11.161.58.147:12200

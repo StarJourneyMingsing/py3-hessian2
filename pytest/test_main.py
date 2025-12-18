@@ -3,7 +3,7 @@ import os
 import unittest
 from collections import UserList
 
-from hessian2 import dumps, loads
+from hessian2 import dumps, loads, TypeConstants
 
 
 class Test(unittest.TestCase):
@@ -287,6 +287,99 @@ class Test(unittest.TestCase):
 
     def test_decode_object(self):
         self.assertEqual(loads(b'\x43\x19\x6f\x72\x67\x2e\x65\x78\x61\x6d\x70\x6c\x65\x2e\x4d\x61\x69\x6e\x24\x54\x65\x73\x74\x42\x65\x61\x6e\x92\x01\x61\x01\x62\x60\x91\x01\x62'), {'#class': 'org.example.Main$TestBean', 'a': 1, 'b': 'b'})
+
+    def test_decode_list_with_ref(self):
+        """Test list containing reference to itself or other lists"""
+        # Case 1: A list that contains a reference to itself: [1, ref(0)]
+        # 0x7a = fixed untyped list length 2
+        # 0x91 = int 1
+        # 0x51 0x90 = ref(0) - reference to the list itself
+        data = b'\x7a\x91\x51\x90'
+        result = loads(data)
+        self.assertEqual(result[0], 1)
+        self.assertIs(result[1], result)  # The second element should be the list itself
+
+        # Case 2: Map containing two keys referencing the same list
+        # { 'a': [1, 2], 'b': ref(1) }
+        # H = 0x48, 'a' = 0x01 0x61, [1,2] = 0x7a 0x91 0x92 (refs[1])
+        # 'b' = 0x01 0x62, ref(1) = 0x51 0x91, Z = 0x5a
+        data = b'\x48\x01\x61\x7a\x91\x92\x01\x62\x51\x91\x5a'
+        result = loads(data)
+        self.assertEqual(result['a'], [1, 2])
+        self.assertIs(result['a'], result['b'])
+
+        # Case 3: Variable length list with self-reference
+        # W value ref(0) Z - variable length untyped list
+        # 0x57 = variable length untyped list
+        # 0x91 = int 1
+        # 0x51 0x90 = ref(0)
+        # 0x5a = Z (end of list)
+        data = b'\x57\x91\x51\x90\x5a'
+        result = loads(data)
+        self.assertEqual(result[0], 1)
+        self.assertIs(result[1], result)
+
+    def test_decode_object_with_ref(self):
+        """Test object containing reference to itself"""
+        # Define class 'T' with fields 'a' and 'b', where b references the object itself
+        # C 'T' 2 'a' 'b' O(0) 1 ref(0)
+        # C = 0x43
+        # 'T' = 0x01 0x54
+        # 2 = 0x92
+        # 'a' = 0x01 0x61
+        # 'b' = 0x01 0x62
+        # 0x60 = object with direct type 0
+        # 0x91 = int 1
+        # 0x51 0x90 = ref(0) - reference to the object itself
+        data = b'\x43\x01\x54\x92\x01\x61\x01\x62\x60\x91\x51\x90'
+        result = loads(data)
+        self.assertEqual(result['#class'], 'T')
+        self.assertEqual(result['a'], 1)
+        self.assertIs(result['b'], result)  # 'b' should reference the object itself
+
+    def test_decode_object_referenced_by_other(self):
+        """Test multiple references to the same object"""
+        # { 'obj1': Object{a:1}, 'obj2': ref(1) }
+        # H = 0x48
+        # 'obj1' = 0x04 obj1
+        # C 'X' 1 'a' O(0) 1  -> defines and creates object
+        # 'obj2' = 0x04 obj2
+        # ref(1) = 0x51 0x91
+        # Z = 0x5a
+        data = b'\x48\x04obj1\x43\x01\x58\x91\x01\x61\x60\x91\x04obj2\x51\x91\x5a'
+        result = loads(data)
+        self.assertEqual(result['obj1']['#class'], 'X')
+        self.assertEqual(result['obj1']['a'], 1)
+        self.assertIs(result['obj1'], result['obj2'])
+
+    def test_decode_typed_list_with_ref(self):
+        """Test typed list with reference"""
+        # Typed list [int: 1, 2] and then reference to it
+        # { 'arr': [int:1,2], 'arr2': ref(1) }
+        # H = 0x48
+        # 'arr' = 0x03 arr
+        # 0x72 = fixed typed list length 2
+        # '[int' = 0x04 [int
+        # 0x91 0x92 = int 1, 2
+        # 'arr2' = 0x04 arr2
+        # ref(1) = 0x51 0x91
+        # Z = 0x5a
+        data = b'\x48\x03arr\x72\x04[int\x91\x92\x04arr2\x51\x91\x5a'
+        result = loads(data)
+        self.assertEqual(list(result['arr']), [1, 2])
+        self.assertEqual(result['arr'].__dict__['#class'], '[int')
+        self.assertIs(result['arr'], result['arr2'])
+
+    def test_decode_nested_ref(self):
+        """Test nested structures with references"""
+        # [map, ref(0)] - list containing a map and ref to itself
+        # 0x7a = fixed untyped list length 2
+        # H 'k' 'v' Z = simple map
+        # 0x51 0x90 = ref(0) to the list
+        data = b'\x7a\x48\x01k\x01v\x5a\x51\x90'
+        result = loads(data)
+        self.assertEqual(result[0], {'k': 'v'})
+        self.assertIs(result[1], result)
 
     @staticmethod
     def _read_file(filename: str) -> bytes:
