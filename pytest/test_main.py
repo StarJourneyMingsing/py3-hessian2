@@ -381,6 +381,26 @@ class Test(unittest.TestCase):
         self.assertEqual(result[0], {'k': 'v'})
         self.assertIs(result[1], result)
 
+    def test_encode_list_with_ref(self):
+        """Test serializer correctly uses ref for duplicate lists"""
+        # Same list referenced twice in a map should use ref
+        l = [1, 2]
+        data = {'a': l, 'b': l}
+        encoded = dumps(data)
+        decoded = loads(encoded)
+        self.assertEqual(decoded['a'], [1, 2])
+        self.assertIs(decoded['a'], decoded['b'])  # Should be the same object
+
+    def test_encode_map_with_ref(self):
+        """Test serializer correctly uses ref for duplicate maps"""
+        # Same map referenced twice should use ref
+        m = {'x': 1}
+        data = {'a': m, 'b': m}
+        encoded = dumps(data)
+        decoded = loads(encoded)
+        self.assertEqual(decoded['a'], {'x': 1})
+        self.assertIs(decoded['a'], decoded['b'])  # Should be the same object
+
     @staticmethod
     def _read_file(filename: str) -> bytes:
         with open(os.getcwd() + '/pytest/' + filename, 'r') as f:

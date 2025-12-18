@@ -335,6 +335,12 @@ class Hessian2Serializer:
         #      ::= x58 int value*        # fixed-length untyped list
         #      ::= [x70-77] type value*  # fixed-length typed list
         #      ::= [x78-7f] value*       # fixed-length untyped list
+        if v is None:
+            self.write_null()
+            return
+        if self._try_write_ref(v):
+            return
+
         l = len(v)
         cls_name = str(v.__dict__['#class']) if hasattr(v, '__dict__') and '#class' in v.__dict__ else None
 
