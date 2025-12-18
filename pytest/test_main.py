@@ -288,8 +288,27 @@ class Test(unittest.TestCase):
     def test_decode_object(self):
         self.assertEqual(loads(b'\x43\x19\x6f\x72\x67\x2e\x65\x78\x61\x6d\x70\x6c\x65\x2e\x4d\x61\x69\x6e\x24\x54\x65\x73\x74\x42\x65\x61\x6e\x92\x01\x61\x01\x62\x60\x91\x01\x62'), {'#class': 'org.example.Main$TestBean', 'a': 1, 'b': 'b'})
 
+    def test_encode_list_with_ref(self):
+        """Test encoding list with references"""
+        # Same list referenced twice in a map should use ref
+        l = [1, 2]
+        data = {'a': l, 'b': l}
+        encoded = dumps(data)
+        decoded = loads(encoded)
+        self.assertEqual(decoded['a'], [1, 2])
+        self.assertIs(decoded['a'], decoded['b'])  # Should be the same object
+
+        # Nested lists with same reference
+        inner = [3, 4]
+        outer = [inner, inner, 5]
+        encoded = dumps(outer)
+        decoded = loads(encoded)
+        self.assertEqual(decoded[0], [3, 4])
+        self.assertIs(decoded[0], decoded[1])
+        self.assertEqual(decoded[2], 5)
+
     def test_decode_list_with_ref(self):
-        """Test list containing reference to itself or other lists"""
+        """Test decoding list containing reference to itself or other lists"""
         # Case 1: A list that contains a reference to itself: [1, ref(0)]
         # 0x7a = fixed untyped list length 2
         # 0x91 = int 1
@@ -319,8 +338,19 @@ class Test(unittest.TestCase):
         self.assertEqual(result[0], 1)
         self.assertIs(result[1], result)
 
+    def test_encode_object_with_ref(self):
+        """Test encoding object with self-reference"""
+        # Create a self-referencing object (map with #class)
+        obj = {'#class': 'SelfRef', 'value': 1}
+        obj['self'] = obj  # Self reference
+        encoded = dumps(obj)
+        decoded = loads(encoded)
+        self.assertEqual(decoded['#class'], 'SelfRef')
+        self.assertEqual(decoded['value'], 1)
+        self.assertIs(decoded['self'], decoded)
+
     def test_decode_object_with_ref(self):
-        """Test object containing reference to itself"""
+        """Test decoding object containing reference to itself"""
         # Define class 'T' with fields 'a' and 'b', where b references the object itself
         # C 'T' 2 'a' 'b' O(0) 1 ref(0)
         # C = 0x43
@@ -337,8 +367,19 @@ class Test(unittest.TestCase):
         self.assertEqual(result['a'], 1)
         self.assertIs(result['b'], result)  # 'b' should reference the object itself
 
+    def test_encode_object_referenced_by_other(self):
+        """Test encoding multiple references to the same object"""
+        # Same object (map with #class) referenced twice
+        obj = {'#class': 'SharedObj', 'a': 1}
+        data = {'obj1': obj, 'obj2': obj}
+        encoded = dumps(data)
+        decoded = loads(encoded)
+        self.assertEqual(decoded['obj1']['#class'], 'SharedObj')
+        self.assertEqual(decoded['obj1']['a'], 1)
+        self.assertIs(decoded['obj1'], decoded['obj2'])
+
     def test_decode_object_referenced_by_other(self):
-        """Test multiple references to the same object"""
+        """Test decoding multiple references to the same object"""
         # { 'obj1': Object{a:1}, 'obj2': ref(1) }
         # H = 0x48
         # 'obj1' = 0x04 obj1
@@ -352,8 +393,20 @@ class Test(unittest.TestCase):
         self.assertEqual(result['obj1']['a'], 1)
         self.assertIs(result['obj1'], result['obj2'])
 
+    def test_encode_typed_list_with_ref(self):
+        """Test encoding typed list with reference"""
+        # Same typed list referenced twice
+        typed_list = UserList([1, 2])
+        typed_list.__dict__['#class'] = '[int'
+        data = {'arr': typed_list, 'arr2': typed_list}
+        encoded = dumps(data)
+        decoded = loads(encoded)
+        self.assertEqual(list(decoded['arr']), [1, 2])
+        self.assertEqual(decoded['arr'].__dict__['#class'], '[int')
+        self.assertIs(decoded['arr'], decoded['arr2'])
+
     def test_decode_typed_list_with_ref(self):
-        """Test typed list with reference"""
+        """Test decoding typed list with reference"""
         # Typed list [int: 1, 2] and then reference to it
         # { 'arr': [int:1,2], 'arr2': ref(1) }
         # H = 0x48
@@ -370,8 +423,19 @@ class Test(unittest.TestCase):
         self.assertEqual(result['arr'].__dict__['#class'], '[int')
         self.assertIs(result['arr'], result['arr2'])
 
+    def test_encode_nested_ref(self):
+        """Test encoding nested structures with references"""
+        # Nested map containing same inner map multiple times
+        inner = {'k': 'v'}
+        outer = {'a': inner, 'b': [inner, inner]}
+        encoded = dumps(outer)
+        decoded = loads(encoded)
+        self.assertEqual(decoded['a'], {'k': 'v'})
+        self.assertIs(decoded['a'], decoded['b'][0])
+        self.assertIs(decoded['b'][0], decoded['b'][1])
+
     def test_decode_nested_ref(self):
-        """Test nested structures with references"""
+        """Test decoding nested structures with references"""
         # [map, ref(0)] - list containing a map and ref to itself
         # 0x7a = fixed untyped list length 2
         # H 'k' 'v' Z = simple map
@@ -381,18 +445,8 @@ class Test(unittest.TestCase):
         self.assertEqual(result[0], {'k': 'v'})
         self.assertIs(result[1], result)
 
-    def test_encode_list_with_ref(self):
-        """Test serializer correctly uses ref for duplicate lists"""
-        # Same list referenced twice in a map should use ref
-        l = [1, 2]
-        data = {'a': l, 'b': l}
-        encoded = dumps(data)
-        decoded = loads(encoded)
-        self.assertEqual(decoded['a'], [1, 2])
-        self.assertIs(decoded['a'], decoded['b'])  # Should be the same object
-
     def test_encode_map_with_ref(self):
-        """Test serializer correctly uses ref for duplicate maps"""
+        """Test encoding map with references"""
         # Same map referenced twice should use ref
         m = {'x': 1}
         data = {'a': m, 'b': m}
@@ -400,6 +454,20 @@ class Test(unittest.TestCase):
         decoded = loads(encoded)
         self.assertEqual(decoded['a'], {'x': 1})
         self.assertIs(decoded['a'], decoded['b'])  # Should be the same object
+
+    def test_decode_map_with_ref(self):
+        """Test decoding map with references"""
+        # { 'a': {x:1}, 'b': ref(1) }
+        # H = 0x48
+        # 'a' = 0x01 0x61
+        # H 'x' 1 Z = 0x48 0x01 0x78 0x91 0x5a (refs[1])
+        # 'b' = 0x01 0x62
+        # ref(1) = 0x51 0x91
+        # Z = 0x5a
+        data = b'\x48\x01\x61\x48\x01\x78\x91\x5a\x01\x62\x51\x91\x5a'
+        result = loads(data)
+        self.assertEqual(result['a'], {'x': 1})
+        self.assertIs(result['a'], result['b'])
 
     @staticmethod
     def _read_file(filename: str) -> bytes:
