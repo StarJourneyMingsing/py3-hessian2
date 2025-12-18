@@ -728,16 +728,21 @@ class Hessian2Deserializer:
 
     def _read_fixed_length_list(self, length: int, cls_name: str = None) -> Union[list, UserList]:
         l = [None] * length
+        ref_idx = len(self._refs)
+        self._refs.append(l)  # per hessian2 spec, list should be added to refs when parsing
         for i in range(length):
             l[i] = self.read()
         if cls_name:
             typed_list = UserList(l)
             typed_list.__dict__['#class'] = cls_name
+            self._refs[ref_idx] = typed_list  # update ref to the actual returned object
             return typed_list
         return l
 
     def _read_variable_length_list(self, cls_name: str = None) -> Union[list, UserList]:
         l = []
+        ref_idx = len(self._refs)
+        self._refs.append(l)  # per hessian2 spec, list should be added to refs when parsing
         while True:
             b = self._reader.look_byte()
             if b == 0x5a:
@@ -747,6 +752,7 @@ class Hessian2Deserializer:
         if cls_name:
             typed_list = UserList(l)
             typed_list.__dict__['#class'] = cls_name
+            self._refs[ref_idx] = typed_list  # update ref to the actual returned object
             return typed_list
         return l
 
@@ -781,6 +787,7 @@ class Hessian2Deserializer:
         else:
             raise ValueError(f'token error {b} at {self._reader.pos()}')
         v = {'#class': cls_definition.cls_name}
+        self._refs.append(v)  # per hessian2 spec, object should be added to refs when parsing
         for field_name in cls_definition.field_names:
             v[field_name] = self.read()
         return v
